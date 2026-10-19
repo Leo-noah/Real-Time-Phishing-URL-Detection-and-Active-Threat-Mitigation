@@ -1,4 +1,4 @@
-Real-Time Phishing URL Detection and Active Threat Mitigation
+# Real-Time Phishing URL Detection and Active Threat Mitigation
 
 A Firefox extension that checks clicked links before normal navigation, combines XGBoost predictions with domain trust and security rules, and responds with **SAFE**, **WARNING**, or **DANGEROUS**.
 

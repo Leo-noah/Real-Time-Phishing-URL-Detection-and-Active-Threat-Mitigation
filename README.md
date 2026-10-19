@@ -1,142 +1,201 @@
-# Online Examination System
+Real-Time Phishing URL Detection and Active Threat Mitigation
 
-My first solo project: an online examination system built with PHP and MySQL. I built it to practise authentication, database operations, role-based workflows, exam management, and grading.
+A Firefox extension that checks clicked links before normal navigation, combines XGBoost predictions with domain trust and security rules, and responds with **SAFE**, **WARNING**, or **DANGEROUS**.
 
-**Project status:** Learning and portfolio prototype. The application has known security and reliability limitations and is not ready for real student examinations or public deployment.
+Developed as an academic cybersecurity prototype.
 
-## Features implemented
+| Project information | Details |
+| --- | --- |
+| Selected model | Optimized XGBoost-1 |
+| Final decision thresholds | 20% / 80% |
 
-- Student registration and login, with separate admin, teacher, and student areas.
-- User, department, and course management.
-- Exam schedules, question ranges, and question entry/import.
-- Multiple-choice, true/false, short-answer, and long-answer questions.
-- Exam submission, a browser countdown, and question navigation.
-- Automatic marking for objective questions and manual teacher grading.
-- Results, teacher feedback, profile editing, and password-change requests.
-- An optional AI question-formatting helper requiring your own API key.
+## Overview
 
-These are implemented features, not a guarantee that every workflow is correct. See the limitations below.
+Phishing links can lead users to fake websites that attempt to steal credentials and personal information. Manual URL checkers require users to inspect a link before opening it, which adds an extra step to everyday browsing.
+
+This project brings URL checking into the browser workflow. The Firefox extension intercepts supported link clicks, checks a local blacklist, and sends unknown URLs to a locally running Flask backend. The backend extracts 20 URL and domain features, runs the trained XGBoost model, and combines the prediction with domain trust and security rules to produce a final danger score.
+
+The extension then allows navigation, displays a warning, or blocks the destination. Warning and blocking pages also explain the risk to support cybersecurity awareness.
+
+## Key Features
+
+- **Browser-level interception:** Checks supported clicked URLs before the destination opens.
+- **Local blacklist:** Recognizes previously blocked domains without repeating model analysis.
+- **Machine learning analysis:** Uses XGBoost with 20 URL and domain features.
+- **Hybrid scoring:** Combines model predictions with domain trust and security rules.
+- **Three response levels:** Allows low-risk links, warns about uncertain links, and blocks high-risk links.
+- **Security awareness pages:** Explains suspicious or dangerous results to users.
+- **Local analysis:** Runs the prediction backend locally without a cloud-hosted URL classification service.
 
 ## How the System Works
 
-The online examination system follows this process:
+```text
+User Clicks a URL
+        ↓
+Firefox Extension Intercepts the Click
+        ↓
+Local Blacklist Check
+        ├── Known Blocked Domain → Block Immediately
+        │
+        └── Unknown Domain
+                ↓
+          Local Flask Backend
+                ↓
+          Extract 20 URL Features
+                ↓
+          XGBoost Prediction
+                +
+          Domain Trust / Security Rules
+                ↓
+          Final Danger Score
+                ↓
+          ≤ 20%           SAFE
+          > 20% and < 80% WARNING
+          ≥ 80%           DANGEROUS
+                ↓
+          Allow / Warn / Block
+```
+
+Newly detected dangerous domains can be stored in the local blacklist for subsequent checks.
+
+## Security Decisions
+
+| Result | Final danger score | Browser response |
+| --- | --- | --- |
+| SAFE | Less than or equal to 20% | Continues normal navigation. |
+| WARNING | Greater than 20% and less than 80% | Displays a warning with **Go Back Safely** and **Proceed Anyway** options. |
+| DANGEROUS | Greater than or equal to 80% | Displays a blocking page with a safe-return option and no proceed option. |
+
+A blacklist match takes the immediate blocking path. The score thresholds apply to URLs sent for backend analysis. A SAFE result is a system classification, not a guarantee that a website is harmless.
+
+## System Components
+
+| Component | Responsibility |
+| --- | --- |
+| Firefox extension | Intercepts clicks, checks the blacklist, requests analysis, and applies the result. |
+| Local storage | Keeps blocked domains using `browser.storage.local`. |
+| Flask backend | Receives URLs and coordinates feature extraction, prediction, and scoring. |
+| Feature extractor | Converts each URL into the 20 inputs expected by the trained model. |
+| XGBoost model | Estimates malicious-URL probability from the extracted features. |
+| Domain trust and security rules | Adjust the decision using domain reputation and suspicious URL indicators. |
+| Warning and blocking interfaces | Show the destination, risk information, and available user actions. |
+
+The prototype does not require user accounts or a traditional database server.
+
+## URL Analysis
+
+The report describes features and scoring indicators covering:
+
+- URL length, domain length, and URL/domain entropy.
+- Subdomains, digits, hyphens, and special characters.
+- HTTPS usage and IP-based hostnames.
+- Suspicious keywords, paths, and file extensions.
+- Query parameters and redirect indicators.
+- Brand-spoofing indicators and trusted-domain status.
+- User-generated-content hosting domains.
+
+These are categories of the reported analysis, rather than an exact ordered list of the 20 model inputs. Popular hosting platforms are treated separately because a trusted platform can still host malicious user-created content.
+
+## Technology Stack
+
+| Area | Technologies |
+| --- | --- |
+| Browser extension | Firefox WebExtension, JavaScript, HTML, CSS |
+| Backend | Python, Flask |
+| Machine learning | XGBoost, Scikit-learn |
+| Data processing | Pandas, NumPy |
+| URL processing | TLDExtract, `urllib.parse`, regular expressions |
+| Model persistence | Joblib |
+| Domain reputation data | Top-1M domain list |
+| Development tools | JupyterLab, Visual Studio Code |
+| Testing environment | Ubuntu 22.04 LTS in VirtualBox on Windows 11 |
+
+## Dataset and Model Development
+
+Three source datasets contained **1,473,168 URL records before preprocessing**. After cleaning conflicting and duplicate records, the report gives **1,449,532 URLs** for the baseline model, divided into:
+
+- **1,159,625** training URLs.
+- **289,907** testing URLs.
+
+The training workflow used an 80/20 stratified split. Later experiments retrained the model with difficult false-positive and false-negative examples and higher sample weights.
+
+The selected final model is **Optimized XGBoost-1**, saved as:
 
 ```text
-User Opens the Website
-        ↓
-Register / Login
-        ↓
-Role-Based Dashboard
-        ↓
-  Admin              Teacher               Student
-    ↓                   ↓                     ↓
-Manage Users        Create Exams        View Available Exams
-Departments         Add Questions              ↓
-and Courses         Set Schedule          Take an Exam
-                        ↓                     ↓
-                   Publish Exam          Submit Answers
-                                              ↓
-                                    Automatic Marking
-                                  (MCQ and True/False)
-                                              ↓
-                                     Teacher Reviews
-                                   Answers and Assigns
-                                      Marks / Feedback
-                                              ↓
-                                    Save Final Results
-                                              ↓
-                                   Student Views Scores
-                                   and Permitted Details
+FINAL_HARD_RETRAINED_PHISHING_MODEL.pkl
 ```
 
-Teachers publish exams for students to take. Submitted objective answers receive initial automatic marks, while teachers review submissions and save final marks and feedback. Students can view their scores, with answer details available when the teacher enables them.
+Optimized XGBoost-1 was chosen for its balance between detection and interruptions to legitimate browsing. The final hybrid configuration uses the **20% / 80% thresholds**.
 
-## Technologies
+## Reported Evaluation Results
 
-PHP, MySQL, PDO, MySQLi, HTML, CSS, JavaScript, Bootstrap, Tailwind CSS on selected pages, and Font Awesome. Several pages load libraries from CDNs and need an internet connection for those assets.
+The following figures come from the project report. They have not been independently reproduced for this README.
 
-## Local setup
+### Binary Model Comparison
 
-Use a local development environment such as XAMPP. This setup is for a private local demonstration.
+The optimized models were compared on **858,347 unique URLs**: 325,129 safe URLs and 533,218 dangerous URLs.
 
-### 1. Prepare the server
+| Metric | Optimized XGBoost-1 | Optimized XGBoost-2 |
+| --- | --- | --- |
+| Accuracy | 97.48% | 97.58% |
+| Precision | 99.18% | 98.02% |
+| Recall | 96.75% | 98.09% |
+| F1-score | 97.95% | 98.05% |
+| False-positive rate | 1.32% | 3.25% |
+| False-negative rate | 3.25% | 1.91% |
 
-- Use PHP 8.x with PDO MySQL and MySQLi enabled. The optional AI helper also requires cURL.
-- Start Apache and MySQL/MariaDB.
-- Copy the project into `C:\xampp\htdocs\uit-php\online_exam_system` when using the default XAMPP location. Some asset URLs currently assume this directory structure.
+The baseline model achieved **93.61% accuracy** on its separate baseline test split. Its score should not be treated as a direct same-test-set comparison with the optimized models.
 
-### 2. Create the database
+### Final Hybrid Configuration: Optimized XGBoost-1 at 20% / 80%
 
-1. Open `http://localhost/phpmyadmin/`.
-2. Create an **empty** database named `uit_exam_system`, using `utf8mb4_general_ci`.
-3. Select that database, choose **Import**, and import `schema.sql`.
+| Metric | Reported result |
+| --- | --- |
+| Safe URLs incorrectly blocked | 0.15% |
+| Dangerous URLs incorrectly allowed as SAFE | 0.63% |
+| Dangerous URLs receiving WARNING or DANGEROUS | 99.37% |
+| Overall warning rate | 28.14% |
 
-The schema contains table definitions only. It contains no passwords, user accounts, exam questions, submissions, or other personal data. Import it into an empty database; it is not a migration or replacement for an existing database.
+**Security coverage includes both warnings and blocks.** It is not the percentage of dangerous URLs automatically blocked. The wider warning band reduces critical allow/block errors while asking users to review more uncertain links.
 
-The schema was prepared from the project's previous table definitions and checked against the current SQL references. A fresh database import and complete application walkthrough have not been run in this review environment.
+These are experimental results for the reported datasets and configuration. They do not establish performance on every unseen URL or browsing environment. Because hard-example retraining used earlier misclassifications, a fresh independent dataset remains important for assessing generalization.
 
-### 3. Configure database access locally
+## Local Setup Overview
 
-`db.php` currently defaults to host `localhost`, database `uit_exam_system`, and user `root`. The three role header files also create MySQLi connections. Keep these four connection configurations consistent. For a dedicated database user, update the username in `db.php` and configure the same user for the headers.
+The report documents the architecture and configuration process, but does not provide a complete reproducible repository installation guide. The following describes the required components; exact commands, backend filenames, ports, and paths should be confirmed against the source code.
 
-The database password is read from the `DB_PASSWORD` environment variable. The headers also support `DB_HOST`, `DB_USER`, and `DB_NAME`.
+1. **Prepare the environment.** Use Firefox and a compatible Python environment. The reported development and testing environment was Ubuntu 22.04 LTS inside VirtualBox.
+2. **Install project dependencies.** Use the repository's dependency specification, if provided. The report lists Flask, XGBoost, Scikit-learn, Pandas, NumPy, TLDExtract, and Joblib.
+3. **Prepare the model and domain data.** Ensure the backend can load `FINAL_HARD_RETRAINED_PHISHING_MODEL.pkl` and its trusted-domain data. Feature order and preprocessing must match model training.
+4. **Start the local backend.** Use the project's actual backend entry point and confirm that the extension's configured API address matches it.
+5. **Load the Firefox extension.** Use Firefox's temporary extension-loading workflow with the project's `manifest.json` during development.
+6. **Verify the integration.** Confirm that links reach the backend, results trigger the intended interfaces, and stored blacklist entries bypass repeat model analysis. Use controlled test inputs in an isolated environment.
 
-For XAMPP with Apache, add the following to your **local Apache configuration**, for example `C:\xampp\apache\conf\httpd.conf`, then restart Apache:
+## Scope and Limitations
 
-```apache
-SetEnv DB_HOST "localhost"
-SetEnv DB_USER "root"
-SetEnv DB_NAME "uit_exam_system"
-SetEnv DB_PASSWORD "REPLACE_WITH_YOUR_LOCAL_DATABASE_PASSWORD"
-```
+- This is an academic prototype focused on phishing indicators in URL structure and domain information.
+- Predictions can produce false positives and false negatives.
+- The system does not inspect webpage content, downloaded file contents, or background network behavior.
+- The implementation was developed and tested mainly for Firefox; Chromium-based browser support is future work.
+- Unknown URLs depend on a running local backend and the required model/data files.
+- Detection quality depends on dataset coverage, feature extraction, model freshness, and scoring rules.
+- Warning pages allow users to continue, so a warning does not guarantee prevention.
+- Broader testing on unseen datasets, browsers, operating systems, and navigation patterns is still needed.
 
-Replace the password placeholder locally. Do not commit this Apache configuration or actual passwords. Merely creating an `.env` file will not work: this project does not include an `.env` loader. If your local MySQL account has no password, the current empty-password fallback will be used.
+## Future Improvements
 
-### 4. Open the project and create your own accounts
+- Add support for Chrome, Edge, and Brave.
+- Evaluate on fresh phishing datasets and improve domain reputation signals.
+- Reduce unnecessary warnings while maintaining detection coverage.
+- Explore browser-side inference to reduce backend setup requirements.
+- Improve blacklist management, logging, and threat-history visibility.
+- Add model updates and investigate operating-system security integration.
 
-1. Open `http://localhost/uit-php/online_exam_system/register.php`.
-2. Register an account. The current registration form accepts Gmail addresses only.
-3. To make your own first account an administrator, use phpMyAdmin's SQL tab on the local database:
+## What I Learned
 
-```sql
-UPDATE users
-SET role = 'admin', status = 'approved'
-WHERE email = 'YOUR_REGISTERED_EMAIL';
-```
+This project gave me practical experience in browser extension development, Flask integration, URL feature engineering, XGBoost training, hard-example retraining, and security testing. It also showed me why a security tool needs to balance missed threats, false blocks, and warning fatigue rather than relying on accuracy alone.
 
-Replace `YOUR_REGISTERED_EMAIL` with the email you registered, and confirm that exactly your intended account was updated. No shared default administrator password is provided.
+## Project Report
 
-4. Open `http://localhost/uit-php/online_exam_system/login.php` and log in.
-5. Add departments and courses, register additional local test accounts, and assign teacher/student roles as needed. Use invented demonstration content rather than real student records.
+**An Intelligent Real-Time URL Interception and Active Threat Mitigation System for Cybersecurity Awareness**  
 
-Uploaded images are intentionally excluded from version control. Where needed, create the local directories `uploads`, `student/uploads`, `teacher/uploads`, `assets/uploads/profiles`, and `assets/uploads/questions`; allow the local server to write to them.
-
-### 5. Optional AI helper
-
-The system can be reviewed without configuring the AI helper. Without a key, the helper returns “AI assistance is not configured.”
-
-If you enable it for local testing, configure `OPENAI_API_KEY` in the server environment with your own key. Never commit an actual key. The current helper lacks authorization and rate limits and disables TLS verification, so it must be hardened before any public exposure or real use.
-
-## Known limitations and planned improvements
-
-- Several admin routes lack authorization checks, and some operations run before access checks.
-- Teacher ownership checks are incomplete for questions, results, and grading.
-- CSRF protection is missing and some state changes use GET requests.
-- Exam timing is browser-controlled; refreshes can restart the countdown. Server-side attempt, deadline, eligibility, and retake enforcement need improvement.
-- Automatic grading does not consistently use configured question marks. Submitted manual marks need stronger validation.
-- Upload validation, output sanitization, login throttling, and session handling need improvement.
-- The optional AI endpoint needs authentication, rate limits, and enabled TLS certificate verification.
-- Responsive layouts, shared styles, asset paths, and some links need cleanup. A shared stylesheet referenced by the current code is missing from this source folder.
-- Creating and editing courses/questions and the full three-role workflow need further testing. Supplying the schema does not fix application-level bugs.
-
-These limitations are part of the project's learning roadmap. Do not use this version for sensitive records or real examinations.
-
-## Repository privacy
-
-The repository is intended to contain source code and an empty schema only. Keep local credentials, uploaded personal files, and populated database backups out of Git. `.gitignore` does not remove files that were committed previously. Revoke any previously exposed API keys and change exposed passwords separately.
-
-GitHub stores the source code. A running PHP/MySQL application needs a PHP-capable server and database; GitHub Pages cannot execute it.
-
-## What I learned
-
-This project helped me practise connecting a PHP application to a database, organising workflows for different users, processing forms, hashing passwords, handling exam answers, and identifying areas for improvement through code review.
+This README summarizes the supplied project report, particularly its architecture, implementation, evaluation, final model selection, and limitations. Source code and runtime behavior were not inspected when preparing this version.
